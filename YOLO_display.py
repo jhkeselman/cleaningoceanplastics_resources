@@ -3,7 +3,7 @@ import cv2
 
 model = YOLO('yolo11n.pt')
 
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 
 # Check if the webcam is opened correctly
 if not cap.isOpened():
