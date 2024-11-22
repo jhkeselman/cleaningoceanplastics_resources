@@ -3,7 +3,7 @@ import cv2
 
 model = YOLO('yolo11n.pt')
 
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -17,7 +17,9 @@ while cap.isOpened():
     for box in results[0].boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0])
         class_label = model.names[int(box.cls[0])]
-        print(f"Detected {class_label} at [{x1}, {y1}, {x2}, {y2}]")
+        raw_conf = box.conf[0]
+        conf = 100 * round(raw_conf.item(), 2)
+        print(f"Detected {class_label} at [{x1}, {y1}, {x2}, {y2}] with {conf}% confidence")
 
     cv2.imshow("YOLO Real-Time Detection", annotated_frame)
 
