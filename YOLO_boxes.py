@@ -14,12 +14,20 @@ while cap.isOpened():
 
     annotated_frame = results[0].plot()
 
+    objectStrings = ""
+
     for box in results[0].boxes:
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
         class_label = model.names[int(box.cls[0])]
         raw_conf = box.conf[0]
         conf = 100 * round(raw_conf.item(), 2)
-        print(f"Detected {class_label} at [{x1}, {y1}, {x2}, {y2}] with {conf}% confidence")
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+        objectString = f"{class_label}, {conf}, {x1}, {y1}, {x2}, {y2}"
+        if objectStrings:  # Check if the string is not empty
+            objectStrings += " $ " + objectString
+        else:
+            objectStrings = objectString  # First element, no separator
+
+    print(objectStrings)
 
     cv2.imshow("YOLO Real-Time Detection", annotated_frame)
 
