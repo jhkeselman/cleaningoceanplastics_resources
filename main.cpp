@@ -14,8 +14,12 @@
 
 #define SLAVE_ADDR 0x55 // Sets address to be looked for
 
-float leftDutyCycle = 0.0;
-float rightDutyCycle = 0.0;
+
+float currentLeftDutyCycle = 0.0;
+float currentRightDutyCycle = 0.0;
+float targetLeftDutyCycle = 0.0;
+float targetRightDutyCycle = 0.0;
+float kp = 0.01;
 
 // These define's must be placed at the beginning before #include "ESP32_PWM.h"
 // _PWM_LOGLEVEL_ from 0 to 4
@@ -36,8 +40,6 @@ ESP32Timer ITimer(1);
 // Init ESP32_ISR_PWM
 ESP32_PWM ISR_PWM;
 
-float current_duty_cycle = 7.5;
-
 bool IRAM_ATTR TimerHandler(void * timerNo)
 {
   ISR_PWM.run();
@@ -57,13 +59,15 @@ void receiveEvent(int numBytes) {
     bufferRight[i] = Wire.read();
   }
 
-  memcpy(&leftDutyCycle, bufferLeft, sizeof(leftDutyCycle));  // Convert bytes to float
-  memcpy(&rightDutyCycle, bufferRight, sizeof(rightDutyCycle));  // Convert bytes to float
-
-  // Update speeds
-  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, leftDutyCycle);
-  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, rightDutyCycle);
+  memcpy(&targetLeftDutyCycle, bufferLeft, sizeof(targetLeftDutyCycle));  // Convert bytes to float
+  memcpy(&targetRightDutyCycle, bufferRight, sizeof(targetRightDutyCycle));  // Convert bytes to float
 }
+
+void update_speeds():
+  currentLeftDutyCycle = currentLeftDutyCycle + kp * (targetLeftDutyCycle - currentLeftDutyCycle);
+  currentRightDutyCycle = currentRightDutyCycle + kp * (targetRightDutyCycle - currentRightDutyCycle);
+  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, currentLeftDutyCycle);
+  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, currentRightDutyCycle);
 
 void requestEvent() {
   Wire.write("ESP32 OK!");  // Send data to Raspberry Pi
@@ -95,6 +99,7 @@ void setup()
 }
 
 void loop() {
+  update_speeds();
   delay(100);
 }
 
