@@ -14,7 +14,8 @@
 
 #define SLAVE_ADDR 0x55 // Sets address to be looked for
 
-float receivedValue = 0.0;
+float leftDutyCycle = 0.0;
+float rightDutyCycle = 0.0;
 
 // These define's must be placed at the beginning before #include "ESP32_PWM.h"
 // _PWM_LOGLEVEL_ from 0 to 4
@@ -45,22 +46,23 @@ bool IRAM_ATTR TimerHandler(void * timerNo)
 }
 
 void receiveEvent(int numBytes) {
-  Serial.println(numBytes);  // Debug: Print received byte count
-
-  if (numBytes >= 4) {  // Expecting at least 4 bytes
-    Wire.read();  // Discard the first byte (extra command byte)
-    
-    byte buffer[4];
-    for (int i = 0; i < 4; i++) {
-      buffer[i] = Wire.read();
-    }
-
-    memcpy(&receivedValue, buffer, sizeof(receivedValue));  // Convert bytes to float
-    
-    // Update speeds
-    ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, receivedValue);
-    ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, receivedValue);
+  Wire.read();  // Discard the first byte (extra command byte)
+  
+  byte bufferLeft[4], bufferRight[4];
+  for (int i = 0; i < 4; i++) {
+    bufferLeft[i] = Wire.read();
   }
+
+  for (int i = 0; i < 4; i++) {
+    bufferRight[i] = Wire.read();
+  }
+
+  memcpy(&leftDutyCycle, bufferLeft, sizeof(leftDutyCycle));  // Convert bytes to float
+  memcpy(&rightDutyCycle, bufferRight, sizeof(rightDutyCycle));  // Convert bytes to float
+
+  // Update speeds
+  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, leftDutyCycle);
+  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, rightDutyCycle);
 }
 
 void requestEvent() {
@@ -95,3 +97,4 @@ void setup()
 void loop() {
   delay(100);
 }
+
