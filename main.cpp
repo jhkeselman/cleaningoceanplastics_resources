@@ -7,6 +7,15 @@
   REQUIRED LIBRARY: ESP32_PWM
 */
 
+// SDA = 21, SCL = 22
+
+#include <Wire.h>
+#include <Arduino.h>
+
+#define SLAVE_ADDR 0x55 // Sets address to be looked for
+
+float receivedValue = 0.0;
+
 // These define's must be placed at the beginning before #include "ESP32_PWM.h"
 // _PWM_LOGLEVEL_ from 0 to 4
 // Don't define _PWM_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system.
@@ -18,8 +27,6 @@
 
 #define HW_TIMER_INTERVAL_US      20L
 
-
-
 uint32_t startMicros = 0;
 
 // Init ESP32 timer 1
@@ -29,8 +36,6 @@ ESP32Timer ITimer(1);
 ESP32_PWM ISR_PWM;
 
 float current_duty_cycle = 7.5;
-float kp = 0.01;
-
 
 bool IRAM_ATTR TimerHandler(void * timerNo)
 {
@@ -39,9 +44,35 @@ bool IRAM_ATTR TimerHandler(void * timerNo)
   return true;
 }
 
+void receiveEvent(int numBytes) {
+  Serial.println(numBytes);  // Debug: Print received byte count
+
+  if (numBytes >= 4) {  // Expecting at least 4 bytes
+    Wire.read();  // Discard the first byte (extra command byte)
+    
+    byte buffer[4];
+    for (int i = 0; i < 4; i++) {
+      buffer[i] = Wire.read();
+    }
+
+    memcpy(&receivedValue, buffer, sizeof(receivedValue));  // Convert bytes to float
+    
+    // Update speeds
+    ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, receivedValue);
+    ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, receivedValue);
+  }
+}
+
+void requestEvent() {
+  Wire.write("ESP32 OK!");  // Send data to Raspberry Pi
+}
+
 void setup()
 {
   Serial.begin(9600);
+  Wire.begin(SLAVE_ADDR);  // Set ESP32 as slave
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
   while (!Serial);
 
   delay(2000);
@@ -61,13 +92,6 @@ void setup()
   Serial.println("Armed");
 }
 
-void loop()
-{
-  
-  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, 7.5);
-  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, 7.5);
-  delay(3000);
-  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, 8);
-  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, 8);
-  delay(3000);
+void loop() {
+  delay(100);
 }
