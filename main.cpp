@@ -19,7 +19,7 @@ float currentLeftDutyCycle = 0.0;
 float currentRightDutyCycle = 0.0;
 float targetLeftDutyCycle = 0.0;
 float targetRightDutyCycle = 0.0;
-float kp = 0.01;
+float kp = 0.1;
 
 // These define's must be placed at the beginning before #include "ESP32_PWM.h"
 // _PWM_LOGLEVEL_ from 0 to 4
@@ -63,11 +63,23 @@ void receiveEvent(int numBytes) {
   memcpy(&targetRightDutyCycle, bufferRight, sizeof(targetRightDutyCycle));  // Convert bytes to float
 }
 
-void update_speeds():
-  currentLeftDutyCycle = currentLeftDutyCycle + kp * (targetLeftDutyCycle - currentLeftDutyCycle);
-  currentRightDutyCycle = currentRightDutyCycle + kp * (targetRightDutyCycle - currentRightDutyCycle);
+void update_speeds() {
+  double threshold = 0.1;
+  if (std::abs(targetLeftDutyCycle - currentLeftDutyCycle) > threshold) {
+    currentLeftDutyCycle = currentLeftDutyCycle + kp * (targetLeftDutyCycle - currentLeftDutyCycle);
+  } else {
+    currentLeftDutyCycle = targetLeftDutyCycle;
+  }
+
+  if (std::abs(targetRightDutyCycle - currentRightDutyCycle) > threshold) {
+    currentRightDutyCycle = currentRightDutyCycle + kp * (targetRightDutyCycle - currentRightDutyCycle);
+  } else {
+    currentRightDutyCycle = targetRightDutyCycle;
+  }  
+  
   ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, currentLeftDutyCycle);
   ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, currentRightDutyCycle);
+}
 
 void requestEvent() {
   Wire.write("ESP32 OK!");  // Send data to Raspberry Pi
