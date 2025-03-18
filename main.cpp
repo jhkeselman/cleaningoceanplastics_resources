@@ -14,12 +14,24 @@
 
 #define SLAVE_ADDR 0x55 // Sets address to be looked for
 
+enum State {
+  LINEAR,
+  TURNING,
+  STOP
+};
+
+// The current state of the robot
+State currentState = STOP;
 
 float currentLeftDutyCycle = 0.0;
 float currentRightDutyCycle = 0.0;
 float targetLeftDutyCycle = 0.0;
 float targetRightDutyCycle = 0.0;
 float kp = 0.1;
+float kp_heading = 0.1;
+
+float currentHeading = 0.0;
+float initialHeading = 0.0;
 
 // These define's must be placed at the beginning before #include "ESP32_PWM.h"
 // _PWM_LOGLEVEL_ from 0 to 4
@@ -49,18 +61,50 @@ bool IRAM_ATTR TimerHandler(void * timerNo)
 
 void receiveEvent(int numBytes) {
   Wire.read();  // Discard the first byte (extra command byte)
+
+  // Get type of message
+  int type = Wire.read();
   
-  byte bufferLeft[4], bufferRight[4];
-  for (int i = 0; i < 4; i++) {
-    bufferLeft[i] = Wire.read();
+  // If it's setting duty cycles, run this
+  if(type == 1) {
+    byte bufferLeft[4], bufferRight[4];
+    for (int i = 0; i < 4; i++) {
+      bufferLeft[i] = Wire.read();
+    }
+
+    for (int i = 0; i < 4; i++) {
+      bufferRight[i] = Wire.read();
+    }
+
+    memcpy(&targetLeftDutyCycle, bufferLeft, sizeof(targetLeftDutyCycle));  // Convert bytes to float
+    memcpy(&targetRightDutyCycle, bufferRight, sizeof(targetRightDutyCycle));  // Convert bytes to float
+
+    // Determine what state to transition into
+    if(targetLeftDutyCycle == targetRightDutyCycle) {
+      // Stop the robot if 7.5% duty cycle
+      if(targetLeftDutyCycle == 7.5) {
+        currentState = STOP;
+      }
+      // Otherwise do heading proportional control
+      else {
+        initialHeading = currentHeading;
+        currentState = LINEAR;
+      }
+    // Otherwise turn
+    } else {
+      currentState = TURNING;
+    }
+
   }
 
-  for (int i = 0; i < 4; i++) {
-    bufferRight[i] = Wire.read();
+  // Send a heading value -180 to 180, store it somewhere 
+  if(type == 0) {
+    byte headingBuffer[4];
+    for (int i = 0; i < 4; i++) {
+      headingBuffer[i] = Wire.read();
+    }
+    memcpy(&currentHeading, headingBuffer, sizeof(currentHeading));
   }
-
-  memcpy(&targetLeftDutyCycle, bufferLeft, sizeof(targetLeftDutyCycle));  // Convert bytes to float
-  memcpy(&targetRightDutyCycle, bufferRight, sizeof(targetRightDutyCycle));  // Convert bytes to float
 }
 
 void update_speeds() {
@@ -83,6 +127,11 @@ void update_speeds() {
 
 void requestEvent() {
   Wire.write("ESP32 OK!");  // Send data to Raspberry Pi
+}
+
+void update_heading() {
+  targetLeftDutyCycle = targetLeftDutyCycle - kp_heading * (initialHeading - currentHeading);
+  targetRightDutyCycle = targetRightDutyCycle + kp_heading * (initialHeading - currentHeading);
 }
 
 void setup()
@@ -111,7 +160,24 @@ void setup()
 }
 
 void loop() {
-  update_speeds();
+  switch(currentState) {
+    // Use heading based proportional control
+    case LINEAR:
+      update_heading();
+      update_speeds();
+      break;
+
+    // Do basic turning
+    case TURNING:
+      update_speeds();
+      break;
+
+    // Stop the motors
+    case STOP:
+      update_speeds();
+      break;
+
+  }
   delay(100);
 }
 
