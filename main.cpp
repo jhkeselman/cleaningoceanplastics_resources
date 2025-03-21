@@ -11,6 +11,8 @@
 
 #include <Wire.h>
 #include <Arduino.h>
+#include <algorithm>
+using namespace std;
 
 #define SLAVE_ADDR 0x55 // Sets address to be looked for
 
@@ -23,12 +25,18 @@ enum State {
 // The current state of the robot
 State currentState = STOP;
 
-float currentLeftDutyCycle = 0.0;
-float currentRightDutyCycle = 0.0;
-float targetLeftDutyCycle = 0.0;
-float targetRightDutyCycle = 0.0;
+float currentLeftDutyCycle = 7.5;
+float currentRightDutyCycle = 7.5;
+float targetLeftDutyCycle = 7.5;
+float targetRightDutyCycle = 7.5;
 float kp = 0.1;
-float kp_heading = 0.1;
+float kp_heading = 0.05;
+
+float lastError = 0.0;
+float kd_heading = 0.005;
+
+float totalError = 0.0;
+float ki_heading = 0.001;
 
 float currentHeading = 0.0;
 float initialHeading = 0.0;
@@ -63,8 +71,14 @@ void receiveEvent(int numBytes) {
   Wire.read();  // Discard the first byte (extra command byte)
 
   // Get type of message
-  int type = Wire.read();
-  
+  // int type = Wire.read();
+  int type;
+  byte bufferType[4];
+    for (int i = 0; i < 4; i++) {
+      bufferType[i] = Wire.read();
+    }
+  memcpy(&type, bufferType, sizeof(type));
+
   // If it's setting duty cycles, run this
   if(type == 1) {
     byte bufferLeft[4], bufferRight[4];
@@ -109,17 +123,37 @@ void receiveEvent(int numBytes) {
 
 void update_speeds() {
   double threshold = 0.1;
-  if (std::abs(targetLeftDutyCycle - currentLeftDutyCycle) > threshold) {
-    currentLeftDutyCycle = currentLeftDutyCycle + kp * (targetLeftDutyCycle - currentLeftDutyCycle);
-  } else {
-    currentLeftDutyCycle = targetLeftDutyCycle;
+  // if (std::abs(targetLeftDutyCycle - currentLeftDutyCycle) > threshold) {
+  //   currentLeftDutyCycle = currentLeftDutyCycle + kp * (targetLeftDutyCycle - currentLeftDutyCycle);
+  // } else {
+  //   currentLeftDutyCycle = targetLeftDutyCycle;
+  // }
+
+  // if (std::abs(targetRightDutyCycle - currentRightDutyCycle) > threshold) {
+  //   currentRightDutyCycle = currentRightDutyCycle + kp * (targetRightDutyCycle - currentRightDutyCycle);
+  // } else {
+  //   currentRightDutyCycle = targetRightDutyCycle;
+  // }  
+
+
+  if(currentLeftDutyCycle < 5.0) {
+    currentLeftDutyCycle = 5.0;
+  }
+  if(currentLeftDutyCycle > 10.0) {
+    currentLeftDutyCycle = 10.0;
   }
 
-  if (std::abs(targetRightDutyCycle - currentRightDutyCycle) > threshold) {
-    currentRightDutyCycle = currentRightDutyCycle + kp * (targetRightDutyCycle - currentRightDutyCycle);
-  } else {
-    currentRightDutyCycle = targetRightDutyCycle;
-  }  
+  if(currentRightDutyCycle < 5.0) {
+    currentRightDutyCycle = 5.0;
+  }
+  if(currentRightDutyCycle > 10.0) {
+    currentRightDutyCycle = 10.0;
+  }
+
+  Serial.println("\nVALUES");
+  Serial.println(currentLeftDutyCycle);
+  Serial.println(currentRightDutyCycle);
+  Serial.println("\n");
   
   ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, currentLeftDutyCycle);
   ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, currentRightDutyCycle);
@@ -130,8 +164,39 @@ void requestEvent() {
 }
 
 void update_heading() {
-  targetLeftDutyCycle = targetLeftDutyCycle - kp_heading * (initialHeading - currentHeading);
-  targetRightDutyCycle = targetRightDutyCycle + kp_heading * (initialHeading - currentHeading);
+  float error = initialHeading - currentHeading;
+
+  float deltaError = error - lastError;
+
+  totalError += error;
+
+  currentLeftDutyCycle = targetLeftDutyCycle + kp_heading * error + kd_heading * deltaError + ki_heading * totalError;
+  currentRightDutyCycle = targetRightDutyCycle - kp_heading * error - kd_heading * deltaError - ki_heading * totalError;
+
+  lastError = error;
+
+  if(currentLeftDutyCycle > 7.6) {
+    std::min(10.0, std::max(7.6, (double) currentLeftDutyCycle));
+  }
+  if(currentLeftDutyCycle < 7.4) {
+    std::max(5.0, std::min(7.4, (double) currentLeftDutyCycle));
+  }
+  if(currentRightDutyCycle < 7.4) {
+    std::max(5.0, std::min(7.4, (double) currentRightDutyCycle));
+  }
+  if(currentRightDutyCycle > 7.6) {
+    std::min(10.0, std::max(7.6, (double) currentRightDutyCycle));
+  }
+}
+
+void turn() {
+  currentLeftDutyCycle = targetLeftDutyCycle;
+  currentRightDutyCycle = targetRightDutyCycle;
+}
+
+void stop() {
+  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, 7.5);
+  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, 7.5);
 }
 
 void setup()
@@ -169,12 +234,13 @@ void loop() {
 
     // Do basic turning
     case TURNING:
+      turn();
       update_speeds();
       break;
 
     // Stop the motors
     case STOP:
-      update_speeds();
+      stop();
       break;
 
   }
