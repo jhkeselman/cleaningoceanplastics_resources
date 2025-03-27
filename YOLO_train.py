@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model = YOLO('/home/jhkeselman/cleaningoceanplastics_resources/runs/detect/train6/weights/best.pt')
+model = YOLO('/home/jhkeselman/cleaningoceanplastics_resources/runs/detect/train4/weights/best.pt')
 # Josh's Turing
 results = model.train(data='/home/jhkeselman/cleaningoceanplastics_resources/datasets/version3/data.yaml', epochs=100, imgsz=640, patience=100, lr0=0.005)
 # Josh's Windows
