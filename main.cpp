@@ -25,19 +25,25 @@ enum State {
 // The current state of the robot
 State currentState = STOP;
 
+// Pin values
+const int LEFT_MOTOR_PIN = 17;
+const int RIGHT_MOTOR_PIN = 16;
+
+// Duty cycles
 float currentLeftDutyCycle = 7.5;
 float currentRightDutyCycle = 7.5;
 float targetLeftDutyCycle = 7.5;
 float targetRightDutyCycle = 7.5;
-float kp = 0.1;
-float kp_heading = 0.05;
 
-float lastError = 0.0;
+
+// PID constants
+float kp_heading = 0.8;
 float kd_heading = 0.005;
-
-float totalError = 0.0;
 float ki_heading = 0.001;
 
+// Other stuff
+float lastError = 0.0;
+float totalError = 0.0;
 float currentHeading = 0.0;
 float initialHeading = 0.0;
 
@@ -71,7 +77,6 @@ void receiveEvent(int numBytes) {
   Wire.read();  // Discard the first byte (extra command byte)
 
   // Get type of message
-  // int type = Wire.read();
   int type;
   byte bufferType[4];
     for (int i = 0; i < 4; i++) {
@@ -79,7 +84,7 @@ void receiveEvent(int numBytes) {
     }
   memcpy(&type, bufferType, sizeof(type));
 
-  // If it's setting duty cycles, run this
+  // If it's setting duty cycles, run this to unpack them
   if(type == 1) {
     byte bufferLeft[4], bufferRight[4];
     for (int i = 0; i < 4; i++) {
@@ -111,7 +116,7 @@ void receiveEvent(int numBytes) {
 
   }
 
-  // Send a heading value -180 to 180, store it somewhere 
+  // Send a heading value -180 to 180, unpack and store it in currentHeading
   if(type == 0) {
     byte headingBuffer[4];
     for (int i = 0; i < 4; i++) {
@@ -122,59 +127,48 @@ void receiveEvent(int numBytes) {
 }
 
 void update_speeds() {
-  double threshold = 0.1;
-  // if (std::abs(targetLeftDutyCycle - currentLeftDutyCycle) > threshold) {
-  //   currentLeftDutyCycle = currentLeftDutyCycle + kp * (targetLeftDutyCycle - currentLeftDutyCycle);
-  // } else {
-  //   currentLeftDutyCycle = targetLeftDutyCycle;
-  // }
+  // Impose hard limits (5% - 10%)
+  currentLeftDutyCycle = std::min(std::max((double) currentLeftDutyCycle, 5.0), 10.0);
+  currentRightDutyCycle = std::min(std::max((double) currentRightDutyCycle, 5.0), 10.0);
 
-  // if (std::abs(targetRightDutyCycle - currentRightDutyCycle) > threshold) {
-  //   currentRightDutyCycle = currentRightDutyCycle + kp * (targetRightDutyCycle - currentRightDutyCycle);
-  // } else {
-  //   currentRightDutyCycle = targetRightDutyCycle;
-  // }  
-
-
-  if(currentLeftDutyCycle < 5.0) {
-    currentLeftDutyCycle = 5.0;
-  }
-  if(currentLeftDutyCycle > 10.0) {
-    currentLeftDutyCycle = 10.0;
-  }
-
-  if(currentRightDutyCycle < 5.0) {
-    currentRightDutyCycle = 5.0;
-  }
-  if(currentRightDutyCycle > 10.0) {
-    currentRightDutyCycle = 10.0;
-  }
-
+  // NOTE: DEBUG
   Serial.println("\nVALUES");
   Serial.println(currentLeftDutyCycle);
   Serial.println(currentRightDutyCycle);
   Serial.println("\n");
   
-  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, currentLeftDutyCycle);
-  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, currentRightDutyCycle);
+  // Update the PWM signals
+  ISR_PWM.modifyPWMChannel_Period(0, LEFT_MOTOR_PIN, 20000, currentLeftDutyCycle);
+  ISR_PWM.modifyPWMChannel_Period(1, RIGHT_MOTOR_PIN, 20000, currentRightDutyCycle);
 }
 
 void requestEvent() {
-  Wire.write("ESP32 OK!");  // Send data to Raspberry Pi
+  // Convert floats to byte arrays
+  byte* ptr1 = (byte*)&currentLeftDutyCycle;
+  byte* ptr2 = (byte*)&currentRightDutyCycle;
+
+  Wire.write(ptr1, 4);  // Send first float (4 bytes)
+  Wire.write(ptr2, 4);  // Send second float (4 bytes)
 }
 
 void update_heading() {
+  // Get error
   float error = initialHeading - currentHeading;
 
+  // Derivative componenent
   float deltaError = error - lastError;
 
+  // Integral component
   totalError += error;
 
+  // Calculate the PID for heading correction (constantly updating the target)
   currentLeftDutyCycle = targetLeftDutyCycle + kp_heading * error + kd_heading * deltaError + ki_heading * totalError;
   currentRightDutyCycle = targetRightDutyCycle - kp_heading * error - kd_heading * deltaError - ki_heading * totalError;
 
+  // Also derivative component
   lastError = error;
 
+  // Make sure the motors don't actually stop when doing heading correction
   if(currentLeftDutyCycle > 7.6) {
     std::min(10.0, std::max(7.6, (double) currentLeftDutyCycle));
   }
@@ -189,27 +183,33 @@ void update_heading() {
   }
 }
 
+// Just set the current to the target (will be sent in update_speeds())
 void turn() {
   currentLeftDutyCycle = targetLeftDutyCycle;
   currentRightDutyCycle = targetRightDutyCycle;
 }
 
+// Set the PWM signals to neutral (7.5% duty cycle)
 void stop() {
-  ISR_PWM.modifyPWMChannel_Period(0, 16, 20000, 7.5);
-  ISR_PWM.modifyPWMChannel_Period(1, 17, 20000, 7.5);
+  currentLeftDutyCycle = 7.5;
+  currentRightDutyCycle = 7.5;
+  ISR_PWM.modifyPWMChannel_Period(0, LEFT_MOTOR_PIN, 20000, currentLeftDutyCycle);
+  ISR_PWM.modifyPWMChannel_Period(1, RIGHT_MOTOR_PIN, 20000, currentRightDutyCycle);
 }
 
+// Setup the microcontroller
 void setup()
 {
   Serial.begin(9600);
   Wire.begin(SLAVE_ADDR);  // Set ESP32 as slave
+  // Define function for when information is requested/transmitted
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);
   while (!Serial);
 
   delay(2000);
 
-  // Interval in microsecs
+  // Interval in microsecs, start interrupts
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_US, TimerHandler))
   {
     startMicros = micros();
@@ -218,8 +218,9 @@ void setup()
   else
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
   
-  ISR_PWM.setPWM_Period(16, 20000, 7.5);
-  ISR_PWM.setPWM_Period(17, 20000, 7.5);
+  // Initialize 2 PWM signals at 20 Hz, neutral duty cycle (7.5%)
+  ISR_PWM.setPWM_Period(LEFT_MOTOR_PIN, 20000, currentLeftDutyCycle);
+  ISR_PWM.setPWM_Period(RIGHT_MOTOR_PIN, 20000, currentRightDutyCycle);
 
   Serial.println("Armed");
 }
@@ -246,4 +247,3 @@ void loop() {
   }
   delay(100);
 }
-
