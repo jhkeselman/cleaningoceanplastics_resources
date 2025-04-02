@@ -124,6 +124,31 @@ void receiveEvent(int numBytes) {
     }
     memcpy(&currentHeading, headingBuffer, sizeof(currentHeading));
   }
+
+  // PID Constant Tuning P = 2, I = 3, D = 4
+  if(type == 2) {
+    byte constantBuffer[4];
+    for (int i = 0; i < 4; i++) {
+      constantBuffer[i] = Wire.read();
+    }
+    memcpy(&kp_heading, constantBuffer, sizeof(kp_heading));
+  }
+
+  if(type == 3) {
+    byte constantBuffer[4];
+    for (int i = 0; i < 4; i++) {
+      constantBuffer[i] = Wire.read();
+    }
+    memcpy(&ki_heading, constantBuffer, sizeof(ki_heading));
+  }
+
+  if(type == 4) {
+    byte constantBuffer[4];
+    for (int i = 0; i < 4; i++) {
+      constantBuffer[i] = Wire.read();
+    }
+    memcpy(&kd_heading, constantBuffer, sizeof(kd_heading));
+  }
 }
 
 void update_speeds() {
@@ -247,3 +272,4 @@ void loop() {
   }
   delay(100);
 }
+
