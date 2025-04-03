@@ -12,6 +12,7 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include <algorithm>
+#include <cmath>
 using namespace std;
 
 #define SLAVE_ADDR 0x55 // Sets address to be looked for
@@ -155,12 +156,6 @@ void update_speeds() {
   // Impose hard limits (5% - 10%)
   currentLeftDutyCycle = std::min(std::max((double) currentLeftDutyCycle, 5.0), 10.0);
   currentRightDutyCycle = std::min(std::max((double) currentRightDutyCycle, 5.0), 10.0);
-
-  // NOTE: DEBUG
-  Serial.println("\nVALUES");
-  Serial.println(currentLeftDutyCycle);
-  Serial.println(currentRightDutyCycle);
-  Serial.println("\n");
   
   // Update the PWM signals
   ISR_PWM.modifyPWMChannel_Period(0, LEFT_MOTOR_PIN, 20000, currentLeftDutyCycle);
@@ -179,6 +174,8 @@ void requestEvent() {
 void update_heading() {
   // Get error
   float error = initialHeading - currentHeading;
+  // Normalize the error when it jumps between -pi and pi
+  error = std::atan2(std::sin(error), std::cos(error));
 
   // Derivative componenent
   float deltaError = error - lastError;
