@@ -13,6 +13,7 @@
 #include <Arduino.h>
 #include <algorithm>
 #include <cmath>
+#include <Preferences.h>
 using namespace std;
 
 #define SLAVE_ADDR 0x55 // Sets address to be looked for
@@ -38,9 +39,13 @@ float targetRightDutyCycle = 7.5;
 
 
 // PID constants
-float kp_heading = 0.8;
-float kd_heading = 0.005;
-float ki_heading = 0.001;
+// Initialize preferences object to save/retrieve NVS variables
+Preferences prefs;
+
+float kp_heading;
+float kd_heading;
+float ki_heading;
+
 
 // Other stuff
 float lastError = 0.0;
@@ -66,6 +71,7 @@ ESP32Timer ITimer(1);
 
 // Init ESP32_ISR_PWM
 ESP32_PWM ISR_PWM;
+
 
 bool IRAM_ATTR TimerHandler(void * timerNo)
 {
@@ -133,6 +139,7 @@ void receiveEvent(int numBytes) {
       constantBuffer[i] = Wire.read();
     }
     memcpy(&kp_heading, constantBuffer, sizeof(kp_heading));
+    prefs.putFloat("P", kp_heading);
   }
 
   if(type == 3) {
@@ -141,6 +148,7 @@ void receiveEvent(int numBytes) {
       constantBuffer[i] = Wire.read();
     }
     memcpy(&ki_heading, constantBuffer, sizeof(ki_heading));
+    prefs.putFloat("I", ki_heading);
   }
 
   if(type == 4) {
@@ -149,6 +157,7 @@ void receiveEvent(int numBytes) {
       constantBuffer[i] = Wire.read();
     }
     memcpy(&kd_heading, constantBuffer, sizeof(kd_heading));
+    prefs.putFloat("D", kd_heading);
   }
 }
 
@@ -231,6 +240,12 @@ void setup()
 
   delay(2000);
 
+  // Retrieve PID variables from NVS
+  prefs.begin("prefs", true);
+  kp_heading = prefs.getFloat("P", 0.6);
+  ki_heading = prefs.getFloat("I", 0.001);
+  kd_heading = prefs.getFloat("D", 0.01);
+
   // Interval in microsecs, start interrupts
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_US, TimerHandler))
   {
@@ -269,4 +284,3 @@ void loop() {
   }
   delay(100);
 }
-
