@@ -8,7 +8,7 @@ from rosbags.typesys import Stores, get_typestore
 import csv
 
 # Path for rosbag folder
-bagpath = Path('/home/jhkeselman/Downloads/rosbag2_2025_03_19-12_25_46')
+bagpath = Path('/home/cooper530/Downloads/data/rosbag2_2025_03_26-12_15_26')
 
 # Create a type store to use if the bag has no message definitions.
 typestore = get_typestore(Stores.ROS2_JAZZY)
