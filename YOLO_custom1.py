@@ -1,3 +1,4 @@
+# Simple code to test custom model weights
 from ultralytics import YOLO
 import cv2
 

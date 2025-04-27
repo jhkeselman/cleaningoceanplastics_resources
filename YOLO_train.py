@@ -1,3 +1,4 @@
+# Simple code to train a new model based on the chosen dataset. Set up to run on the Turing cluster
 from ultralytics import YOLO
 
 model = YOLO('/home/jhkeselman/cleaningoceanplastics_resources/runs/detect/train11/weights/bestv11.pt')

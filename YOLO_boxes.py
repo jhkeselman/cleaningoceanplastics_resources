@@ -1,3 +1,4 @@
+# File for testing YOLO and retrieving information about the bounding boxes
 from ultralytics import YOLO
 import cv2
 

@@ -1,3 +1,4 @@
+# Simple test to make sure webcam is functioning
 from ultralytics import YOLO
 import cv2
 
